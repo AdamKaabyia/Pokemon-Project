@@ -1,20 +1,16 @@
 from fastapi import FastAPI, HTTPException, requests
 from sqlalchemy.engine import row
 from sqlalchemy.orm import Session
-from models import Base, Pokemon, Type, engine
+from models import Base, Pokemon, Type, engine, Trainer
 from pydantic import BaseModel
 import requests
 
-from query import find_by_type, find_pokemons_of_trainer
+from query import find_by_type, find_pokemons_of_trainer, find_owners
 
 app = FastAPI()
 
 
 # Pydantic models to validate data
-
-
-class PokemonCreate(BaseModel):
-    name: str
 
 
 def fetch_pokemon_types(pokemon_name):
@@ -51,20 +47,20 @@ if pokemon_details:
 
 
 @app.post("/pokemon/")
-def add_pokemon(pokemon: PokemonCreate):
+def add_pokemon(pokemon_name):
     db = Session(bind=engine)
-    db_pokemon = db.query(Pokemon).filter(Pokemon.name == pokemon.name).first()
+    db_pokemon = db.query(Pokemon).filter(Pokemon.name == pokemon_name).first()
     if db_pokemon:
         db.close()
         raise HTTPException(status_code=400, detail="Pokemon already exists")
 
-    types = fetch_pokemon_types(pokemon.name)
-    details = fetch_pokemon_details(pokemon.name)
+    types = fetch_pokemon_types(pokemon_name)
+    details = fetch_pokemon_details(pokemon_name)
     if types is None or details is None:
         db.close()
         raise HTTPException(status_code=400, detail="Pokemon does not exist")
 
-    new_pokemon = Pokemon(name=pokemon.name, height=details["height"], weight=details["weight"])
+    new_pokemon = Pokemon(name=pokemon_name, height=details["height"], weight=details["weight"])
     db.add(new_pokemon)
 
     for pt in types:
@@ -87,3 +83,45 @@ def get_pokemon_by_type(type):
 @app.get("/pokemon/by_trainer")
 def get_pokemon_by_trainer(trainer_name):
     return find_pokemons_of_trainer(trainer_name)
+
+
+@app.get("/pokemon/by_pokemon")
+def get_trainers_by_pokemons(pokemon_name):
+    return find_owners(pokemon_name)
+
+
+@app.delete("/pokemon/")
+def delete_pokemon_of_trainer(poke_name, trainer_name):
+    db = Session(bind=engine)
+    db_pokemon = db.query(Pokemon).filter(Pokemon.name == poke_name).first()
+    if not db_pokemon:
+        db.close()
+        raise HTTPException(status_code=400, detail="Pokemon does not exist")
+    db_trainer = db.query(Trainer).filter(Trainer.name == trainer_name).filter(Trainer.poke_id == db_pokemon.id).first()
+    if not db_trainer:
+        db.close()
+        raise HTTPException(status_code=400, detail="Pokemon does not exist")
+
+    db.delete(db_trainer)
+    db.commit()
+    db.close()
+
+@app.post("/pokemon/add")
+def add_pokemon_to_trainer(poke_name, trainer_name,town):
+    db = Session(bind=engine)
+    db_pokemon = db.query(Pokemon).filter(Pokemon.name == poke_name).first()
+    if not db_pokemon:
+        db.close()
+        add_pokemon(poke_name)
+        db = Session(bind=engine)
+
+    db_trainer = db.query(Trainer).filter(Trainer.name == trainer_name).all()
+    if db_trainer:
+        db_trainer = db_trainer.filter(Trainer.poke_id == db_pokemon.id)
+        db.close()
+        raise HTTPException(status_code=400, detail="Pokemon already exists")
+    new_pair = Trainer(name=trainer_name, town=town,poke_id=db_pokemon.id)
+    db.add(new_pair)
+
+    db.commit()
+    db.close()

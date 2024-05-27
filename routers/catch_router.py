@@ -5,26 +5,31 @@ from routers.pokemones_router import add_pokemon
 
 router = APIRouter()
 
+from fastapi import HTTPException
 
-@router.post("/add")
+
+@router.post("/catch-pokemon")
 def add_pokemon_to_trainer(poke_name: str, trainer_name: str, town: str):
+    try:
+        add_pokemon(poke_name)
+    except HTTPException as e:
+        if e.status_code==407:
+            return e.detail
+
+
     session = Session(bind=engine)
     try:
+
         db_pokemon = session.query(Pokemon).filter(Pokemon.name == poke_name).first()
         if not db_pokemon:
-            result = add_pokemon(poke_name)
-            if result["status"] != "success":
-                raise HTTPException(status_code=400, detail="Could not add Pokemon")
-            db_pokemon = session.query(Pokemon).filter(Pokemon.name == poke_name).first()
-
-        db_trainer = session.query(Trainer).filter(Trainer.name == trainer_name, Trainer.town == town).first()
+            raise HTTPException(status_code=404, detail="Pokemon data not found")
+        db_trainer = session.query(Trainer).filter(Trainer.name == trainer_name).first()
         if db_trainer:
             existing_pair = session.query(Trainer_Enrollment).filter_by(trainer_id=db_trainer.id,
                                                                         poke_id=db_pokemon.id).first()
             if existing_pair:
-                raise HTTPException(status_code=400, detail="This trainer already has this Pokémon.")
-
-        if not db_trainer:
+                raise HTTPException(status_code=404, detail="This trainer already has this Pokémon.")
+        else:
             db_trainer = Trainer(name=trainer_name, town=town)
             session.add(db_trainer)
             session.flush()
@@ -33,12 +38,10 @@ def add_pokemon_to_trainer(poke_name: str, trainer_name: str, town: str):
         session.add(new_pair)
         session.commit()
 
-        return {"status": "success", "message": "Pokemon added to trainer successfully"}
+        return "Pokemon added to trainer successfully"
 
-    except HTTPException as http_ex:
-        raise http_ex
     except Exception as e:
         session.rollback()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=406, detail="shit happened")
     finally:
         session.close()

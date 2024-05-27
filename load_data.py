@@ -14,6 +14,7 @@ def loadDB():
 
     # Insert data into database
     for entry in data:
+
         # Insert Pokemon
         pokemon = Pokemon(id=entry['id'], name=entry['name'], height=entry['height'], weight=entry['weight'])
         session.add(pokemon)
@@ -51,4 +52,4 @@ def loadDB():
 
 
 # Call loadDB to populate the database with data from JSON file
-loadDB()
+#loadDB()

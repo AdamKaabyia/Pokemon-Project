@@ -1,6 +1,8 @@
 import requests
 
 URL = "https://pokeapi.co/api/v2/pokemon/"
+
+
 def fetch_pokemon_types(pokemon_name):
     response = requests.get(f"{URL}{pokemon_name.lower()}")
     if response.status_code == 200:

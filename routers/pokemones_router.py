@@ -1,28 +1,23 @@
 from fastapi import APIRouter, HTTPException, requests
 from sqlalchemy.orm import Session
-from models import Base, Pokemon, Type, engine, Trainer
+from models import Base, Pokemon, Type, engine, Trainer, Type_Enrollment
 
 from query import find_by_type, find_pokemons_of_trainer, find_owners
 from utils import fetch_pokemon_types, fetch_pokemon_details
 
 router = APIRouter()
 
-from sqlalchemy.orm import Session
-from fastapi import HTTPException
-from .models import Pokemon, Type
-from .database import engine, fetch_pokemon_types, fetch_pokemon_details  # Assuming these functions are defined correctly
 
 @router.post("/")
 def add_pokemon(pokemon_name: str):
-    session = Session(bind=engine)
-    try:
+    with Session(bind=engine) as session:
         db_pokemon = session.query(Pokemon).filter(Pokemon.name == pokemon_name).first()
         if db_pokemon:
             raise HTTPException(status_code=400, detail="Pokemon already exists")
 
         types = fetch_pokemon_types(pokemon_name)
         details = fetch_pokemon_details(pokemon_name)
-        if types is None or details is None:
+        if not types or not details:
             raise HTTPException(status_code=404, detail="Pokemon data not found")
 
         new_pokemon = Pokemon(name=pokemon_name, height=details["height"], weight=details["weight"])
@@ -36,19 +31,12 @@ def add_pokemon(pokemon_name: str):
                 session.add(type_instance)
                 session.flush()  # Ensuring type_instance.id is available for relationship
 
-            new_pokemon.types.append(type_instance)
-
+            new_type_enrollment=Type_Enrollment(type_id=type_instance.id,poke_id=new_pokemon.id)
+            session.add(new_type_enrollment)
+            session.flush()
         session.commit()
         return {"status": "success", "message": "Pokemon added successfully"}
 
-    except HTTPException as http_ex:
-        # Pass through HTTPException to be handled by FastAPI
-        raise http_ex
-    except Exception as e:
-        session.rollback()
-        raise HTTPException(status_id=500, detail=str(e))
-    finally:
-        session.close()
 
 
 @router.get("/by_type")

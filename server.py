@@ -1,6 +1,6 @@
 
 from fastapi import FastAPI
-from routes import pokemones_router, catch_router, evolve_router
+from routers import pokemones_router, catch_router, evolve_router
 
 app = FastAPI()
 
